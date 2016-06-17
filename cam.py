@@ -63,6 +63,7 @@ from cv2 import cv
 
 # predictor_path = sys.argv[1]
 # faces_folder_path = sys.argv[2]
+saveToVideo = True
 faceOnly = False
 SCALE_FACTOR = 1 
 FEATHER_AMOUNT = 11
@@ -95,12 +96,16 @@ OVERLAY_GROUPS = [JAW_LINE,LEFT_BROW_POINTS,RIGHT_BROW_POINTS,JAW_LINE,LEFT_BROW
 # ]
 screenheight = 320
 screenwidth = 480
+
 predictor_path='../../examples/faces/shape_predictor_68_face_landmarks.dat' 
 # faces_folder_path = '../examples/faces/'
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(predictor_path)
 x_offset=y_offset=50
 emoji = cv2.imread("happy.png")
+fourcc = cv2.cv.CV_FOURCC('m','p','4','v')
+vout = cv2.VideoWriter()
+success = vout.open('output.mov',fourcc,15,(480,320),True)
 faceRect = detector(emoji, 1)[0]
 # win = dlib.image_window()
 def get_landmarks(im):
@@ -154,8 +159,8 @@ def get_face_mask(im, landmarks):
 
 def draw_polyline(im,landmarks):
     if faceOnly:
-        im = numpy.zeros(im.shape[:3], dtype=numpy.float64)
-
+        print "faceOnly on"
+        im[0:screenheight] = 0.0
     pts = numpy.array([[10,5],[20,30],[70,20],[50,10]], numpy.int32)
     pts = pts.reshape((-1,1,2))
     for landmark in landmarks:
@@ -164,31 +169,49 @@ def draw_polyline(im,landmarks):
             cv2.polylines(im,ftrpoints,False,(0,255,0),1,8)
     return im
 
-cam = cv2.VideoCapture(0)
-print "Camera initialized"
-cam.set(3,screenwidth)
-cam.set(4,screenheight)
-scale = 0.5
-cv2.namedWindow('CamFace')
-tickCount = 0
-looping = True
-
-while looping:
-    tickCount += 1
-    x_offset,y_offset = faceRect.left(),faceRect.top()
+def clean_offset(x_offset,y_offset):
     if x_offset < 0: x_offset = 0
     if x_offset > screenwidth: x_offset = screenwidth
     if y_offset < 0: y_offset = 0
     if y_offset > screenheight: y_offset = screenheight
-    im, s = read_im_and_landmarks()
+    return x_offset,y_offset
 
+# Initialize camera
+cv2.namedWindow('CamFace')
+cam = cv2.VideoCapture(0)
+
+print "Camera initialized"
+cam.set(3,screenwidth)
+cam.set(4,screenheight)
+size = (480,320)
+# size = (int(cam.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)),
+                # int(cam.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+scale = 0.5
+tickCount = 0
+looping = True
+
+# Video loop
+while looping:
+    tickCount += 1
+    x_offset,y_offset = clean_offset(faceRect.left(),faceRect.top()) 
+    
+    # Detect faces and landmarks
+    im, s = read_im_and_landmarks()
+    
+    # Draw green lines
+    im = draw_polyline(im,s)
+
+    # Other display options
     # im = annotate_landmarks(im,s)
     # im = get_face_mask(im,s) 
-    im = draw_polyline(im,s)
-    # cv2.addWeighted(emoji,0.5,im,0.5,0,im)
+    
+    # Add emoji to image
     im[y_offset:y_offset+emoji.shape[0], x_offset:x_offset+emoji.shape[1]] = emoji
+    
     cv2.imshow('CamFace',im) 
-    # win.add_overlay(dets)
+    if saveToVideo:
+        vout.write(im)
+
     keypress = cv2.waitKey(1) & 0xFF
     if keypress != 255:
         print (keypress)
@@ -200,5 +223,7 @@ while looping:
   
 # When everything is done, release the capture
 cam.release()
+vout.release() 
+vout = None
 cv2.waitKey(0)
 cv2.destroyAllWindows()
