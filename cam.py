@@ -48,8 +48,11 @@ import dlib
 import glob
 from skimage import io
 import cv2
-import numpy 
+import numpy as np
+# import video
 from cv2 import cv
+from common import anorm2, draw_str
+from time import clock
 # if len(sys.argv) != 3:
     # print(
         # "Give the path to the trained shape predictor model as the first "
@@ -63,7 +66,24 @@ from cv2 import cv
 
 # predictor_path = sys.argv[1]
 # faces_folder_path = sys.argv[2]
-saveToVideo = True
+
+# LK parameters
+lk_params = dict( winSize  = (15, 15),
+                  maxLevel = 2,
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+
+feature_params = dict( maxCorners = 500,
+                       qualityLevel = 0.3,
+                       minDistance = 7,
+                       blockSize = 7 )
+
+track_len = 10
+detect_interval = 5
+tracks = []
+frame_idx = 0
+
+# Other parameters
+saveToVideo = False
 faceOnly = False
 SCALE_FACTOR = 1 
 FEATHER_AMOUNT = 11
@@ -114,7 +134,7 @@ def get_landmarks(im):
     if rects: faceRect = rects[0]
     landmarks = []
     for idx,i in enumerate(rects):
-        landmarks.append(numpy.matrix([[p.x,p.y] for p in predictor(im, rects[idx]).parts()]))
+        landmarks.append(np.matrix([[p.x,p.y] for p in predictor(im, rects[idx]).parts()]))
     return landmarks
 
 def annotate_landmarks(im, landmarks):
@@ -142,7 +162,7 @@ def draw_convex_hull(im, points, color):
     cv2.fillConvexPoly(im, points, color=color)
     
 def get_face_mask(im, landmarks):
-    im = numpy.zeros(im.shape[:2], dtype=numpy.float64)
+    im = np.zeros(im.shape[:2], dtype=np.float64)
     
     for landmark in landmarks:
         for group in OVERLAY_POINTS:
@@ -150,7 +170,7 @@ def get_face_mask(im, landmarks):
                              landmark[group],
                              color=1)
 
-    im = numpy.array([im, im, im]).transpose((1, 2, 0))
+    im = np.array([im, im, im]).transpose((1, 2, 0))
 
     im = (cv2.GaussianBlur(im, (FEATHER_AMOUNT, FEATHER_AMOUNT), 0) > 0) * 1.0
     im = cv2.GaussianBlur(im, (FEATHER_AMOUNT, FEATHER_AMOUNT), 0)
@@ -161,12 +181,35 @@ def draw_polyline(im,landmarks):
     if faceOnly:
         print "faceOnly on"
         im[0:screenheight] = 0.0
-    pts = numpy.array([[10,5],[20,30],[70,20],[50,10]], numpy.int32)
+    pts = np.array([[10,5],[20,30],[70,20],[50,10]], np.int32)
     pts = pts.reshape((-1,1,2))
     for landmark in landmarks:
         for group in OVERLAY_GROUPS:
             ftrpoints = [landmark[group]]
             cv2.polylines(im,ftrpoints,False,(0,255,0),1,8)
+    return im
+
+def analyze_emotions(im,landmarks):
+    for landmark in landmarks:
+        # Observe eyebrow height for surprise
+        standheight = np.absolute(landmark[27,1] - landmark[30,1])
+        eyebrowheight = np.absolute(landmark[27,1] - landmark[19,1])
+        if standheight == 0:
+            standheight += 0.01
+        eyedist = float(eyebrowheight) / float(standheight)
+        mouthheight = np.absolute(landmark[50,1]-landmark[57,1])
+        if float(mouthheight)/float(standheight) > 30:
+            cv2.putText(im, "mouthheight: "+str(mouthheight), (screenwidth - 80,10),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                        fontScale=0.4,
+                        color=(0, 0, 255),
+                        thickness=2)
+        eyedist += mouthheight / 30
+        mouthwidth = np.absolute(landmark[48,0]-landmark[50,0])
+        nosewidth = np.absolute(landmark[31,0]-landmark[35,0])
+        mouthdist = float(mouthwidth) / nosewidth
+        im = score_emotions(im,eyedist,mouthdist)
+         
     return im
 
 def clean_offset(x_offset,y_offset):
@@ -176,6 +219,35 @@ def clean_offset(x_offset,y_offset):
     if y_offset > screenheight: y_offset = screenheight
     return x_offset,y_offset
 
+def score_emotions(im,eyebrowheight,mouthdist):
+    gray = (129,129,129)
+    red = (0,0,255)
+    if eyebrowheight > 0.75:
+        surscore = eyebrowheight * 10
+        surscore = str(int(surscore))
+        color = red
+    else:
+        color = gray
+        surscore = ''
+    cv2.putText(im, "SURPRISE = "+surscore, (3*screenwidth/5,screenheight/3),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX,
+                    fontScale=0.7,
+                    color=color,
+                    thickness=1)
+    if mouthdist > 0.9:
+        hapscore = mouthdist * 100
+        hapscore = str(int(hapscore))
+        color = red
+    else:
+        color = gray
+        hapscore = ''
+    cv2.putText(im, "HAPPINESS = "+hapscore, (3*screenwidth/5,screenheight/3+20),
+                    fontFace=cv2.FONT_HERSHEY_DUPLEX,
+                    fontScale=0.7,
+                    color=color,
+                    thickness=1)
+
+    return im
 # Initialize camera
 cv2.namedWindow('CamFace')
 cam = cv2.VideoCapture(0)
@@ -200,19 +272,59 @@ while looping:
     
     # Draw green lines
     im = draw_polyline(im,s)
-
     # Other display options
     # im = annotate_landmarks(im,s)
     # im = get_face_mask(im,s) 
+    # im = analyze_emotions(im,s)
     
     # Add emoji to image
-    im[y_offset:y_offset+emoji.shape[0], x_offset:x_offset+emoji.shape[1]] = emoji
+    # im[y_offset:y_offset+emoji.shape[0], x_offset:x_offset+emoji.shape[1]] = emoji
+    im_gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)    
+    vis = im.copy() 
+
+    # Adding LK_track
+    if len(tracks) > 0:
+        print "Len > 0"
+        img0, img1 = prev_gray, im_gray
+        p0 = np.float32([tr[-1] for tr in tracks]).reshape(-1, 1, 2)
+        p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
+        p0r, st, err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
+        d = abs(p0-p0r).reshape(-1, 2).max(-1)
+        good = d < 1
+        new_tracks = []
+        for tr, (x, y), good_flag in zip(tracks, p1.reshape(-1, 2), good):
+            if not good_flag:
+                continue
+            tr.append((x, y))
+            if len(tr) > track_len:
+                del tr[0]
+            new_tracks.append(tr)
+            cv2.circle(vis, (x, y), 2, (0, 255, 0), -1)
+        tracks = new_tracks
+        cv2.polylines(vis, [np.int32(tr) for tr in tracks], False, (0, 255, 0))
+        draw_str(vis, (20, 20), 'track count: %d' % len(tracks))
+
+    if frame_idx % detect_interval == 0:
+        mask = np.zeros_like(im_gray)
+        mask[:] = 255
+        for x, y in [np.int32(tr[-1]) for tr in tracks]:
+            cv2.circle(mask, (x, y), 5, 0, -1)
+        p = cv2.goodFeaturesToTrack(im_gray, mask = mask, **feature_params)
+        if p is not None:
+            for x, y in np.float32(p).reshape(-1, 2):
+                tracks.append([(x, y)])
+
+    frame_idx += 1
+    prev_gray = im_gray  
+    # Show image
+    # cv2.imshow('CamFace',im) 
+    cv2.imshow('CamFace',vis)
     
-    cv2.imshow('CamFace',im) 
+    # Save to video (optional)
     if saveToVideo:
         vout.write(im)
-
-    keypress = cv2.waitKey(1) & 0xFF
+        
+    keypress = cv2.waitKey(5) & 0xFF
     if keypress != 255:
         print (keypress)
         if keypress == 32: # Spacebar
