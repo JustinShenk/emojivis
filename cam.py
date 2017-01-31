@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/env/bin python3
 # The contents of this file are in the public domain. See LICENSE_FOR_EXAMPLE_PROGRAMS.txt
 #
 #   This example program shows how to find frontal human faces in an image and
@@ -50,7 +50,7 @@ from skimage import io
 import cv2
 import numpy as np
 # import video
-from cv2 import cv
+# from cv2 import cv
 from common import anorm2, draw_str
 from time import clock
 # if len(sys.argv) != 3:
@@ -64,8 +64,8 @@ from time import clock
         # "    http://sourceforge.net/projects/dclib/files/dlib/v18.10/shape_predictor_68_face_landmarks.dat.bz2")
     # exit()
 
-# predictor_path = sys.argv[1]
-# faces_folder_path = sys.argv[2]
+predictor_path = sys.argv[1]
+faces_folder_path = sys.argv[2]
 
 # LK parameters
 lk_params = dict( winSize  = (15, 15),
@@ -117,13 +117,14 @@ OVERLAY_GROUPS = [JAW_LINE,LEFT_BROW_POINTS,RIGHT_BROW_POINTS,JAW_LINE,LEFT_BROW
 screenheight = 320
 screenwidth = 480
 
-predictor_path='../../examples/faces/shape_predictor_68_face_landmarks.dat' 
+# predictor_path='../../examples/faces/shape_predictor_68_face_landmarks.dat' 
 # faces_folder_path = '../examples/faces/'
+
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(predictor_path)
 x_offset=y_offset=50
 emoji = cv2.imread("happy.png")
-fourcc = cv2.cv.CV_FOURCC('m','p','4','v')
+fourcc = cv2.VideoWriter_fourcc('m','p','4','v')
 vout = cv2.VideoWriter()
 success = vout.open('output.mov',fourcc,15,(480,320),True)
 faceRect = detector(emoji, 1)[0]
@@ -179,7 +180,7 @@ def get_face_mask(im, landmarks):
 
 def draw_polyline(im,landmarks):
     if faceOnly:
-        print "faceOnly on"
+        print("faceOnly on")
         im[0:screenheight] = 0.0
     pts = np.array([[10,5],[20,30],[70,20],[50,10]], np.int32)
     pts = pts.reshape((-1,1,2))
@@ -252,7 +253,7 @@ def score_emotions(im,eyebrowheight,mouthdist):
 cv2.namedWindow('CamFace')
 cam = cv2.VideoCapture(0)
 
-print "Camera initialized"
+print("Camera initialized")
 cam.set(3,screenwidth)
 cam.set(4,screenheight)
 size = (480,320)
@@ -284,7 +285,7 @@ while looping:
 
     # Adding LK_track
     if len(tracks) > 0:
-        print "Len > 0"
+        print("Len > 0")
         img0, img1 = prev_gray, im_gray
         p0 = np.float32([tr[-1] for tr in tracks]).reshape(-1, 1, 2)
         p1, st, err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
@@ -330,7 +331,7 @@ while looping:
         if keypress == 32: # Spacebar
             faceOnly = not faceOnly
         elif keypress == 113 or 27: # 'q' pressed to quit
-            print "Escape key entered"
+            print("Escape key entered")
             looping = False
   
 # When everything is done, release the capture
