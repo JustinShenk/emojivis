@@ -188,35 +188,40 @@ def get_face_mask(im, landmarks):
     return im
 
 # Draw delaunay triangles
-def draw_delaunay(im, subdiv, delaunay_color ) :
- 
-    triangleList = subdiv.getTriangleList();
+
+
+def draw_delaunay(im, subdiv, delaunay_color):
+
+    triangleList = subdiv.getTriangleList()
     size = im.shape
     r = (0, 0, size[1], size[0])
- 
-    for t in triangleList :
-         
+
+    for t in triangleList:
+
         pt1 = (t[0], t[1])
         pt2 = (t[2], t[3])
         pt3 = (t[4], t[5])
-         
-        if rect_contains(r, pt1) and rect_contains(r, pt2) and rect_contains(r, pt3) :
-         
+
+        if rect_contains(r, pt1) and rect_contains(r, pt2) and rect_contains(r, pt3):
+
             cv2.line(im, pt1, pt2, delaunay_color, 1, cv2.CV_AA, 0)
             cv2.line(im, pt2, pt3, delaunay_color, 1, cv2.CV_AA, 0)
             cv2.line(im, pt3, pt1, delaunay_color, 1, cv2.CV_AA, 0)
- 
+
 # Check if a point is inside a rectangle
-def rect_contains(rect, point) :
-    if point[0] < rect[0] :
+
+
+def rect_contains(rect, point):
+    if point[0] < rect[0]:
         return False
-    elif point[1] < rect[1] :
+    elif point[1] < rect[1]:
         return False
-    elif point[0] > rect[2] :
+    elif point[0] > rect[2]:
         return False
-    elif point[1] > rect[3] :
+    elif point[1] > rect[3]:
         return False
     return True
+
 
 def draw_polyline(im, landmarks):
     if faceOnly:
@@ -227,12 +232,12 @@ def draw_polyline(im, landmarks):
     if len(landmarks):
         bottomRight = (max(landmarks[0][:, 0]), max(landmarks[0][:, 1]))
         topLeft = (min(landmarks[0][:, 0]), min(landmarks[0][:, 1]))
-        rect = (0,0,im.shape[1],im.shape[0])
+        rect = (0, 0, im.shape[1], im.shape[0])
         # FIXME: Delaunay triangulation.
         # subdiv = cv2.Subdiv2D(rect)
     for landmark in landmarks:
         for group in OVERLAY_GROUPS:
-            ftrpoints = [landmark[group]]            
+            ftrpoints = [landmark[group]]
             cv2.polylines(im, ftrpoints, False, (0, 255, 0), 1, 8)
             # FIXME: Delaunay triangulation.
             # for pt in ftrpoints:
@@ -337,9 +342,9 @@ while looping:
     # im = get_face_mask(im,s)
     # im = analyze_emotions(im,s)
 
-    # Add emoji to image
-    im[y_offset:y_offset + emoji.shape[0],
-        x_offset:x_offset + emoji.shape[1]] = emoji
+    # # Add emoji to image
+    # im[y_offset:y_offset + emoji.shape[0],
+    #     x_offset:x_offset + emoji.shape[1]] = emoji
     im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     vis = im.copy()
 
